@@ -1,0 +1,97 @@
+version: '3'
+
+services:
+  ebiz:
+    build:
+      context: ../
+      dockerfile: .local/Dockerfile
+    container_name: ebiz
+    ports:
+      - "3001:3001" # expose Vite port
+    volumes:
+      - ../:/ebiz/src/
+      - ./storage:/ebiz/src/storage
+      - ./public/storage:/ebiz/src/public/storage
+    restart: always
+    depends_on:
+      - redis
+      - ebiz_db
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - ebiz_app_network
+
+  ebiz_db:
+    image: postgres:15
+    container_name: ebiz_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    restart: always
+    environment:
+      POSTGRES_DB: ebizfilling_cms
+      POSTGRES_USER: root_user
+      POSTGRES_PASSWORD: root_pass
+    networks:
+      - ebiz_app_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: root@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root@123
+    ports:
+      - "5050:80"
+    depends_on:
+      - ebiz_db
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - ebiz_app_network
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - ebiz_app_network
+
+  redis:
+    image: redis
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - ebiz_app_network
+    command: [
+      "redis-server",
+      "--save", "60", "1",
+      "--save", "300", "10",
+      "--protected-mode", "yes",
+      "--requirepass", "your_strong_password"
+    ]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: nginx
+    ports:
+       - "80:80"
+      #- "443:443"
+    depends_on:
+      - ebiz
+    networks:
+      - ebiz_app_network
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  ebiz_app_network:
+    driver: bridge

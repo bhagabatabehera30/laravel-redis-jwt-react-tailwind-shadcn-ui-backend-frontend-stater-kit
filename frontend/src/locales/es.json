@@ -1,0 +1,8 @@
+{
+  "welcome": "Bienvenido",
+  "login": "Iniciar sesión",
+  "email": "Correo electrónico",
+  "password": "Contraseña",
+  "dashboard": "Panel de control",
+  "logout": "Cerrar sesión"
+}

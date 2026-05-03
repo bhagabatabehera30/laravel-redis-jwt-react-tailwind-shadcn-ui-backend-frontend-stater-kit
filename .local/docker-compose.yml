@@ -1,0 +1,100 @@
+version: '3'
+
+services:
+  saaserp:
+    # user: "${UID}:${GID}" # this added for vscode edit
+    build:
+      context: ../
+      dockerfile: .local/Dockerfile
+    container_name: saaserp
+    ports:
+      - "3001:3001" # expose Vite port
+    volumes:
+      - ../backend:/saaserp/src/
+      - ../storage:/saaserp/src/storage
+      #- ../public/storage:/saaserp/src/public/storage
+    restart: always
+    depends_on:
+      - redis
+      - saaserp_db
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # - UID=1000 # this added for vscode edit
+      # - GID=1000 # this added for vscode edit
+    networks:
+      - saaserp_app_network
+
+  saaserp_db:
+    image: postgres:15
+    container_name: saaserp_db
+    volumes:
+      - saaserp_postgres_data:/var/lib/postgresql/data/
+    restart: always
+    environment:
+      POSTGRES_DB: saas_erp
+      POSTGRES_USER: root_user
+      POSTGRES_PASSWORD: root_pass
+    networks:
+      - saaserp_app_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: root@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root@123
+    ports:
+      - "5050:80"
+    depends_on:
+      - saaserp_db
+    volumes:
+      - saaserp_pgadmin_data:/var/lib/pgadmin
+    networks:
+      - saaserp_app_network
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - saaserp_app_network
+
+  redis:
+    image: redis
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - saaserp_app_network
+    command: [
+      "redis-server",
+      "--save", "60", "1",
+      "--save", "300", "10",
+      "--protected-mode", "yes",
+      "--requirepass", "your_strong_password"
+    ]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: nginx
+    ports:
+       - "80:80"
+      #- "443:443"
+    depends_on:
+      - saaserp
+    networks:
+      - saaserp_app_network
+
+volumes:
+  saaserp_postgres_data:
+  saaserp_pgadmin_data:
+
+networks:
+  saaserp_app_network:
+    driver: bridge
