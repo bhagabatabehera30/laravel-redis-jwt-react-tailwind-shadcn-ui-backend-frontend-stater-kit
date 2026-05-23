@@ -106,7 +106,12 @@ class AuthController extends Controller
 
     public function me()
     {
-        return response()->json($this->auth->user());
+        $user = $this->auth->user();
+        $user->load('userProfile');
+        return response()->json([
+            'success' => true,
+            'user' => $user
+        ], 200);
     }
 
     public function logout(Request $request)

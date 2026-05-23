@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles,  HasFactory, Notifiable,  SoftDeletes;
+    use HasFactory, HasRoles, Notifiable,  SoftDeletes;
 
 
     protected $dates = ['deleted_at'];
@@ -32,14 +32,7 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'password',
         'mobile_number',
-        'status',
-        'author_bio',
-        'user_pic',
-        'facebook_link',
-        'youtube_link',
-        'linkedin_link',
-        'instagram_link',
-        'twitter_link'
+        'status'
     ];
 
     /**
@@ -51,7 +44,9 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'remember_token',
         'two_factor_secret', 
-        'two_factor_recovery_codes'
+        'two_factor_recovery_codes',
+        'otp',
+        'otp_expiry',
     ];
 
 
@@ -107,5 +102,10 @@ class User extends Authenticatable implements JWTSubject
     protected function permissionsArr()
     {
         return config('permissions');
+    }
+
+    public function userProfile()
+    {
+        return $this->hasOne(UserProfile::class);
     }
 }

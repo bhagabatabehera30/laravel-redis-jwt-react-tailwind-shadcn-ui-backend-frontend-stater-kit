@@ -1,6 +1,6 @@
 #!/usr/bin/env bash 
 
-
+# chown -R bhagabat:bhagabat /home/bhagabat/docker_php_apps/laravel_erp_frontend_backend/
 #git config --global --add safe.directory /saaserp/src
 chown -R www-data:www-data /saaserp/src   # in production open this 
 cd /saaserp/src/
