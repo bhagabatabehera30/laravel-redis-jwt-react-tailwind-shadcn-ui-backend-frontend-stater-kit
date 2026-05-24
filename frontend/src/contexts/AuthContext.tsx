@@ -6,9 +6,12 @@ import { setAccessToken } from '../services/auth';
 interface AuthContextType {
   isAuthenticated: boolean;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  user: any | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; tfaRequired: boolean; tfaToken?: string; otpCode?: string }>;
+  verifyTfa: (tfaToken: string, code: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
+  fetchCurrentUser: () => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,12 +30,22 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isRestored, setIsRestored] = useState(false);
 
   useEffect(() => {
     restoreSession();
   }, []);
+
+  // Fetch current user whenever token transitions to active
+  useEffect(() => {
+    if (token) {
+      fetchCurrentUser();
+    } else {
+      setUser(null);
+    }
+  }, [token]);
 
   const isTokenValid = (jwt: string): boolean => {
     try {
@@ -45,6 +58,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch {
       return false;
     }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await api.get('/auth/me');
+      if (response.data.success) {
+        setUser(response.data.user);
+        return response.data.user;
+      }
+    } catch {
+      setUser(null);
+    }
+    return null;
   };
 
   const restoreSession = async () => {
@@ -88,6 +114,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       const data = response.data;
+      if (data.tfa_required) {
+        return {
+          success: true,
+          tfaRequired: true,
+          tfaToken: data.tfa_token,
+          otpCode: data.otp_code,
+        };
+      }
+
       if (!data.success || !data.access_token) {
         throw new Error(data.message || 'Login failed');
       }
@@ -95,11 +130,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(data.access_token);
       setAccessToken(data.access_token);
       setIsAuthenticated(true);
-    } catch (error) {
+      return { success: true, tfaRequired: false };
+    } catch (error: any) {
       setToken(null);
       setAccessToken(null);
       setIsAuthenticated(false);
-      throw new Error('Login failed');
+      const msg = error.response?.data?.message || 'Login failed';
+      throw new Error(msg);
+    }
+  };
+
+  const verifyTfa = async (tfaToken: string, code: string) => {
+    try {
+      const response = await api.post('/auth/tfa/verify', {
+        tfa_token: tfaToken,
+        code,
+      });
+
+      const data = response.data;
+      if (!data.success || !data.access_token) {
+        throw new Error(data.message || 'Two-factor verification failed');
+      }
+
+      setToken(data.access_token);
+      setAccessToken(data.access_token);
+      setIsAuthenticated(true);
+    } catch (error: any) {
+      setToken(null);
+      setAccessToken(null);
+      setIsAuthenticated(false);
+      const msg = error.response?.data?.message || 'Two-factor verification failed';
+      throw new Error(msg);
     }
   };
 
@@ -112,6 +173,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(null);
       setAccessToken(null);
       setIsAuthenticated(false);
+      window.location.href = '/';
     }
   };
 
@@ -136,7 +198,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, token, login, logout, refresh }}>
+    <AuthContext.Provider value={{ isAuthenticated, token, user, login, verifyTfa, logout, refresh, fetchCurrentUser }}>
       {isRestored ? (
         children
       ) : (

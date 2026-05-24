@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,7 +12,9 @@ import { Separator } from './ui/separator';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from './ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Bell, Search, Menu, Settings, User, LogOut, Moon, Sun, Languages } from 'lucide-react';
+import { Bell, Search, Menu, Settings, User, LogOut, Moon, Sun, Languages, Globe } from 'lucide-react';
+import api from '../services/api';
+import { toast } from 'sonner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,10 +28,44 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
 
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [activeUuid, setActiveUuid] = useState<string | null>(localStorage.getItem('active_tenant_uuid'));
+
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchLayoutTenants = async () => {
+      try {
+        const res = await api.get('/tenants');
+        if (res.data.success) {
+          setTenants(res.data.tenants);
+          // Auto-select first workspace context if none exists yet
+          if (!localStorage.getItem('active_tenant_uuid') && res.data.tenants.length > 0) {
+            const firstUuid = res.data.tenants[0].uuid;
+            localStorage.setItem('active_tenant_uuid', firstUuid);
+            setActiveUuid(firstUuid);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load layout tenants', err);
+      }
+    };
+
+    fetchLayoutTenants();
+
+    const handleTenantChange = () => {
+      setActiveUuid(localStorage.getItem('active_tenant_uuid'));
+    };
+
+    window.addEventListener('tenantChanged', handleTenantChange);
+    return () => {
+      window.removeEventListener('tenantChanged', handleTenantChange);
+    };
+  }, []);
 
   const navigation = [
     { name: 'Dashboard', href: '/' },
+    { name: 'Tenants', href: '/tenants' },
     { name: 'Users', href: '/users' },
     { name: 'Settings', href: '/settings' },
   ];
@@ -160,6 +196,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </form>
 
             <div className="flex items-center gap-x-2 sm:gap-x-4 lg:gap-x-6">
+              {/* Active Tenant Workspace selector */}
+              {tenants.length > 0 && (
+                <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-800 pr-4">
+                  <Globe className="h-4 w-4 text-blue-500 hidden sm:inline" />
+                  <Select
+                    value={activeUuid || ''}
+                    onValueChange={(val) => {
+                      localStorage.setItem('active_tenant_uuid', val);
+                      setActiveUuid(val);
+                      const t = tenants.find((tenant) => tenant.uuid === val);
+                      toast.success(`Active Workspace: ${t?.name}`);
+                      window.dispatchEvent(new Event('tenantChanged'));
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px] md:w-[170px] h-8 bg-transparent border-slate-200 dark:border-slate-800 focus:ring-0 text-xs font-bold text-slate-800 dark:text-slate-200">
+                      <SelectValue placeholder="Workspace" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenants.map((t) => (
+                        <SelectItem key={t.uuid} value={t.uuid} className="text-xs font-semibold">
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {/* Language dropdown */}
               <div className="hidden sm:flex items-center gap-2">
                 <Languages className="h-4 w-4 text-muted-foreground" />
@@ -236,7 +299,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <span>Settings</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout}>
+                  <DropdownMenuItem onSelect={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>{t('logout')}</span>
                   </DropdownMenuItem>

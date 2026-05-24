@@ -6,6 +6,7 @@ import UserList from './pages/users/UserList'; // Force-refresh TS mapping
 import UserFormPage from './pages/users/UserFormPage';
 import UserSettings from './pages/settings/UserSettings';
 import MyProfilePage from './pages/users/MyProfilePage';
+import TenantsPage from './pages/tenants/TenantsPage';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -17,6 +18,7 @@ function App() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/my-profile" element={<MyProfilePage />} />
+        <Route path="/tenants" element={<TenantsPage />} />
         <Route path="/users" element={<UserList />} />
         <Route path="/users/add" element={<UserFormPage />} />
         <Route path="/users/edit/:id" element={<UserFormPage />} />

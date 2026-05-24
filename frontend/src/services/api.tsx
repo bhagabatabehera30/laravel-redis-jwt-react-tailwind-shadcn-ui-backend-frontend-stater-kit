@@ -20,6 +20,12 @@ api.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
         }
 
+        const activeTenantUuid = localStorage.getItem('active_tenant_uuid');
+        if (activeTenantUuid) {
+            config.headers = config.headers || {};
+            config.headers['X-Tenant-UUID'] = activeTenantUuid;
+        }
+
         if (config.data instanceof FormData) {
             delete config.headers['Content-Type'];
         } else if (config.data instanceof URLSearchParams) {

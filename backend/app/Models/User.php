@@ -13,14 +13,33 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Notifiable,  SoftDeletes;
+    use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
 
     protected $dates = ['deleted_at'];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
+    }
+
+    public function tenants()
+    {
+        return $this->belongsToMany(Tenant::class, 'tenant_users')
+            ->withPivot('role_id')
+            ->withTimestamps();
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -32,7 +51,13 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'password',
         'mobile_number',
-        'status'
+        'status',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'two_factor_confirmed_at',
+        'otp',
+        'otp_expiry',
+        'token_version'
     ];
 
     /**
@@ -107,5 +132,26 @@ class User extends Authenticatable implements JWTSubject
     public function userProfile()
     {
         return $this->hasOne(UserProfile::class);
+    }
+
+    public function tenantRole($tenantId)
+    {
+        $pivot = $this->tenants()->where('tenant_id', $tenantId)->first();
+        if ($pivot && $pivot->pivot->role_id) {
+            return \Spatie\Permission\Models\Role::find($pivot->pivot->role_id);
+        }
+        return null;
+    }
+
+    public function hasTenantRole($tenantId, string $roleName): bool
+    {
+        $role = $this->tenantRole($tenantId);
+        return $role && $role->name === $roleName;
+    }
+
+    public function hasTenantPermission($tenantId, string $permissionName): bool
+    {
+        $role = $this->tenantRole($tenantId);
+        return $role && $role->hasPermissionTo($permissionName);
     }
 }

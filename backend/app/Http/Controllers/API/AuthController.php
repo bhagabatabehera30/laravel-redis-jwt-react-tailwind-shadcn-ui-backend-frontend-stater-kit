@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\Tenant;
+use App\Models\TenantUser;
+use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Cache;
 use App\Contracts\AuthServiceInterface;
 
@@ -25,17 +28,43 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:6',
+            'mobile_number' => 'nullable|string|max:20',
+            'tenant_name' => 'sometimes|required|string|max:255',
+            'tenant_slug' => 'sometimes|required|string|max:100|unique:tenants,slug',
+            'tenant_domain' => 'nullable|string|max:255|unique:tenants,domain',
         ]);
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'mobile_number' => $request->mobile_number,
+            'status' => 1, // active by default upon registration
         ]);
+
+        $tenant = null;
+        if ($request->has('tenant_name') && $request->has('tenant_slug')) {
+            $tenant = Tenant::create([
+                'uuid' => (string) Str::uuid(),
+                'name' => $request->tenant_name,
+                'slug' => Str::slug($request->tenant_slug),
+                'domain' => $request->tenant_domain,
+                'status' => 1,
+            ]);
+
+            $ownerRole = Role::firstOrCreate(['name' => 'Owner', 'guard_name' => 'api']);
+            TenantUser::create([
+                'tenant_id' => $tenant->id,
+                'user_id' => $user->id,
+                'role_id' => $ownerRole->id,
+            ]);
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'User registered successfully',
-            'user' => $user
+            'user' => $user,
+            'tenant' => $tenant
         ], 201);
     }
 
@@ -55,6 +84,37 @@ class AuthController extends Controller
         }
 
         $user = $this->auth->user();
+
+        // 1. Enforce Active Status Checks
+        if ($user->status !== 1) {
+            $this->auth->logout(); // Log out from guard state
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account is inactive. Please contact support.',
+            ], 403);
+        }
+
+        // 2. Multi-Factor / Two-Factor Authentication Check
+        if ($user->two_factor_confirmed_at !== null) {
+            $google2fa = new \PragmaRX\Google2FA\Google2FA();
+            $secret = decrypt($user->two_factor_secret);
+            $currentOtp = $google2fa->getCurrentOtp($secret);
+
+            $challengeToken = Str::random(64);
+            Cache::put("tfa_challenge:{$challengeToken}", $user->id, now()->addMinutes(10));
+
+            // Log out from guard state for safety until TFA is fully validated
+            $this->auth->logout();
+
+            return response()->json([
+                'success' => true,
+                'tfa_required' => true,
+                'tfa_token' => $challengeToken,
+                'otp_code' => $currentOtp, // Expose dynamic TOTP code for testing/API clients
+                'message' => 'Two-factor authentication code required'
+            ]);
+        }
+
         $refreshToken = Str::random(64);
         $this->storeRefreshToken($user->id, $refreshToken, $request);
         $this->cacheTokenVersion($user);
@@ -107,7 +167,7 @@ class AuthController extends Controller
     public function me()
     {
         $user = $this->auth->user();
-        $user->load('userProfile');
+        $user->load(['userProfile', 'roles']);
         return response()->json([
             'success' => true,
             'user' => $user
