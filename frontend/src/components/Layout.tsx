@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { initEcho } from '../lib/echo';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -22,7 +23,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { t } = useTranslation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,8 +31,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const [tenants, setTenants] = useState<any[]>([]);
   const [activeUuid, setActiveUuid] = useState<string | null>(localStorage.getItem('active_tenant_uuid'));
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await api.get('/notifications');
+        if (res.data.success) {
+          setNotifications(res.data.notifications);
+        }
+      } catch (err) {
+        console.error('Failed to load notifications', err);
+      }
+    };
+    
+    fetchNotifications();
+  }, []);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem('access_token');
+    if (!token || !user?.id) return;
+    
+    const echo = initEcho(token);
+    
+    if (echo) {
+      echo.private(`App.Models.User.${user.id}`)
+        .listenToAll((event: any, data: any) => {
+          console.log('Echo received event:', event, data);
+        })
+        .notification((notification: any) => {
+          console.log('Notification received:', notification);
+          setNotifications((prev) => [notification, ...prev]);
+          toast.info(notification.title, {
+            description: notification.message
+          });
+        });
+    }
+
+    return () => {
+      if (echo) {
+        echo.disconnect();
+      }
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     const fetchLayoutTenants = async () => {
@@ -263,15 +307,54 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:bg-accent hover:text-accent-foreground">
                     <Bell className="h-5 w-5" />
-                    <Badge className="absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 text-[10px] flex items-center justify-center">3</Badge>
+                    {notifications.length > 0 && (
+                      <Badge className="absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 text-[10px] flex items-center justify-center">
+                        {notifications.length}
+                      </Badge>
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
+                  <DropdownMenuLabel className="flex justify-between items-center">
+                    Notifications
+                    {notifications.length > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-auto p-1 text-xs"
+                        onClick={async () => {
+                          await api.post('/notifications/mark-as-read');
+                          setNotifications([]);
+                        }}
+                      >
+                        Mark all as read
+                      </Button>
+                    )}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>New user registered</DropdownMenuItem>
-                  <DropdownMenuItem>System update available</DropdownMenuItem>
-                  <DropdownMenuItem>Payment received</DropdownMenuItem>
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No new notifications
+                    </div>
+                  ) : (
+                    notifications.map((notification, index) => (
+                      <DropdownMenuItem 
+                        key={notification.id || index} 
+                        className="flex flex-col items-start gap-1 p-3 cursor-pointer"
+                        onClick={async () => {
+                          if (notification.id) {
+                            await api.post('/notifications/mark-as-read', { id: notification.id });
+                            setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+                          }
+                        }}
+                      >
+                        <span className="font-semibold">{notification.data?.title || notification.title}</span>
+                        <span className="text-xs text-muted-foreground line-clamp-2">
+                          {notification.data?.message || notification.message}
+                        </span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 

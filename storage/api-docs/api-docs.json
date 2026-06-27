@@ -402,6 +402,167 @@
                 ]
             }
         },
+        "/api/v1/notifications": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Get all unread notifications",
+                "operationId": "af04bb36e3e902874bbc55187deef606",
+                "responses": {
+                    "200": {
+                        "description": "List of unread notifications",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "notifications": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/notifications/mark-as-read": {
+            "post": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Mark notifications as read",
+                "description": "Marks a specific notification as read if ID is provided, otherwise marks all unread notifications as read.",
+                "operationId": "3ac9ef2fadae96be906315c9cf6d4669",
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "id": {
+                                        "description": "Optional notification ID to mark as read",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Notifications marked as read",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Notifications marked as read"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/notifications/test": {
+            "post": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Trigger a test notification",
+                "description": "Generates a dummy test notification for the authenticated user for debugging purposes.",
+                "operationId": "8ba03d3b00e6fee10232f976ccd16f5a",
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "title": {
+                                        "type": "string",
+                                        "example": "Test Title"
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "Test message generated via Swagger"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "example": "info"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Test notification sent successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Test notification sent"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/roles": {
             "get": {
                 "tags": [
@@ -1667,6 +1828,10 @@
         }
     },
     "tags": [
+        {
+            "name": "Notifications",
+            "description": "API Endpoints for User Notifications"
+        },
         {
             "name": "Authentication",
             "description": "Authentication"

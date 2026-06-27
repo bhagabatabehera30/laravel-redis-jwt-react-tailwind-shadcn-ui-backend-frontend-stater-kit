@@ -155,4 +155,12 @@ class User extends Authenticatable implements JWTSubject
         $role = $this->tenantRole($tenantId);
         return $role && $role->hasPermissionTo($permissionName);
     }
+
+    /**
+     * The channels the user receives notification broadcasts on.
+     */
+    public function receivesBroadcastNotificationsOn(): string
+    {
+        return 'App.Models.User.'.$this->id;
+    }
 }

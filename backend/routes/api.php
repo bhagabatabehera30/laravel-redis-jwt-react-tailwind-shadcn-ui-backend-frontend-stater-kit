@@ -7,6 +7,7 @@ use App\Http\Controllers\API\TenantController;
 use App\Http\Controllers\API\TwoFactorController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\RoleController;
+use App\Http\Controllers\API\NotificationController;
 use App\Http\Middleware\TenantContextMiddleware;
 
 Route::prefix('v1')->group(function () {
@@ -33,6 +34,11 @@ Route::prefix('v1')->group(function () {
         // Roles & Permissions API
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [RoleController::class, 'permissions']);
+
+        // Notifications API
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::post('notifications/mark-as-read', [NotificationController::class, 'markAsRead']);
+        Route::post('notifications/test', [NotificationController::class, 'test']);
     });
 
     // Tenants Management API (requires authentication & scopes using TenantContextMiddleware)
