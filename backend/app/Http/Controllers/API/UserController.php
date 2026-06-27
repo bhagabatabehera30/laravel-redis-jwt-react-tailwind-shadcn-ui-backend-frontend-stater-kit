@@ -39,7 +39,11 @@ class UserController extends Controller
         tags: ["Users"],
         security: [["bearerAuth" => []]],
         parameters: [
-            new OA\Parameter(name: "X-Tenant-Id", in: "header", required: false, description: "Optional UUID of the tenant context", schema: new OA\Schema(type: "string"))
+            new OA\Parameter(name: "X-Tenant-Id", in: "header", required: false, description: "Optional UUID of the tenant context", schema: new OA\Schema(type: "string")),
+            new OA\Parameter(name: "page", in: "query", required: false, description: "Page number", schema: new OA\Schema(type: "integer", default: 1)),
+            new OA\Parameter(name: "per_page", in: "query", required: false, description: "Items per page", schema: new OA\Schema(type: "integer", default: 10)),
+            new OA\Parameter(name: "search", in: "query", required: false, description: "Search by name or email", schema: new OA\Schema(type: "string")),
+            new OA\Parameter(name: "status", in: "query", required: false, description: "Filter by status (all, 1, 0)", schema: new OA\Schema(type: "string", default: "all"))
         ],
         responses: [
             new OA\Response(
@@ -50,8 +54,18 @@ class UserController extends Controller
                         new OA\Property(property: "success", type: "boolean", example: true),
                         new OA\Property(
                             property: "users",
-                            type: "array",
-                            items: new OA\Items(type: "object")
+                            type: "object",
+                            properties: [
+                                new OA\Property(property: "current_page", type: "integer", example: 1),
+                                new OA\Property(
+                                    property: "data",
+                                    type: "array",
+                                    items: new OA\Items(type: "object")
+                                ),
+                                new OA\Property(property: "last_page", type: "integer", example: 10),
+                                new OA\Property(property: "per_page", type: "integer", example: 10),
+                                new OA\Property(property: "total", type: "integer", example: 100),
+                            ]
                         )
                     ]
                 )
@@ -69,22 +83,38 @@ class UserController extends Controller
                 return response()->json(['success' => false, 'message' => 'Tenant context required'], 400);
             }
             // Global access for Super Admin
-            $users = User::with('userProfile', 'roles')->get()->map(function ($u) {
-                $u->role = $u->roles->first()->name ?? 'User';
-                return $u;
-            });
+            $usersQuery = User::with('userProfile', 'roles');
         } else {
             if (!$this->checkTenantAccess($authUser, $tenant, 'api.user.view')) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized to view users in this tenant'], 403);
             }
-            $users = $tenant->users()->with('userProfile')->get()->map(function ($u) use ($tenant) {
-                $u->role = $u->tenantRole($tenant->id)->name ?? 'User';
-                return $u;
+            $usersQuery = $tenant->users()->with('userProfile');
+        }
+
+        // Search Filter
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $usersQuery->where(function($q) use ($search) {
+                $q->where('users.name', 'like', "%{$search}%")
+                  ->orWhere('users.email', 'like', "%{$search}%");
             });
         }
 
-        // Format to match frontend structure for easy integration
-        $formattedUsers = $users->map(function ($u) {
+        // Status Filter
+        if ($request->has('status') && $request->status !== 'all') {
+            $usersQuery->where('users.status', $request->status);
+        }
+
+        $perPage = $request->input('per_page', 10);
+        $paginatedUsers = $usersQuery->paginate($perPage);
+
+        // Map roles
+        $paginatedUsers->getCollection()->transform(function ($u) use ($tenant) {
+            if (!$tenant) {
+                $u->role = $u->roles->first()->name ?? 'User';
+            } else {
+                $u->role = $u->tenantRole($tenant->id)->name ?? 'User';
+            }
             return [
                 'id' => $u->id,
                 'first_name' => $u->userProfile->first_name ?? $u->name,
@@ -102,7 +132,7 @@ class UserController extends Controller
 
         return response()->json([
             'success' => true,
-            'users' => $formattedUsers
+            'users' => $paginatedUsers
         ]);
     }
 

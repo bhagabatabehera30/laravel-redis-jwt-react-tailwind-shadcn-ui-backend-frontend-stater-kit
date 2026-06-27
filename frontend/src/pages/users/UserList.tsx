@@ -30,6 +30,8 @@ const UserList: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [isFetching, setIsFetching] = useState(true);
 
   // Filter State
@@ -39,15 +41,28 @@ const UserList: React.FC = () => {
   const itemsPerPage = 6;
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    // Add a slight debounce for search queries
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [currentPage, searchQuery, statusFilter]);
 
   const fetchUsers = async () => {
     setIsFetching(true);
     try {
-      const response = await api.get('/users');
+      const response = await api.get('/users', {
+        params: {
+          page: currentPage,
+          per_page: itemsPerPage,
+          search: searchQuery,
+          status: statusFilter
+        }
+      });
       if (response.data.success) {
-        setUsers(response.data.users);
+        setUsers(response.data.users.data);
+        setTotalPages(response.data.users.last_page);
+        setTotalUsers(response.data.users.total);
       } else {
         toast.error('Failed to load users');
       }
@@ -74,23 +89,7 @@ const UserList: React.FC = () => {
     }
   };
 
-  // Filter Logic securely
-  const filteredUsers = useMemo(() => {
-    return users.filter(user => {
-      const matchesSearch = 
-        `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.email.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesStatus = statusFilter === 'all' || String(user.status) === statusFilter;
-      
-      return matchesSearch && matchesStatus;
-    });
-  }, [users, searchQuery, statusFilter]);
-
-  // Pagination Logic
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
+  // Pagination Logic handled by server.
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
   };
@@ -156,8 +155,8 @@ const UserList: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedUsers.length > 0 ? (
-                    paginatedUsers.map((user) => (
+                  {users.length > 0 ? (
+                    users.map((user) => (
                       <TableRow key={user.id} className="hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium">
                           <div className="flex flex-col">
@@ -201,7 +200,7 @@ const UserList: React.FC = () => {
             {totalPages > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-6 border-t border-slate-100 dark:border-slate-800/60 mt-4">
                 <div className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} total results
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalUsers)} of {totalUsers} total results
                 </div>
                 <div className="flex gap-2">
                   <Button

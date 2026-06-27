@@ -26,6 +26,11 @@ const TenantsPage: React.FC = () => {
   const isSuperAdmin = user?.is_super_admin || user?.roles?.some((r: any) => r.name === 'Super Admin') || user?.role === 'Super Admin' || false;
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalTenants, setTotalTenants] = useState(0);
+  const itemsPerPage = 6;
+
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeUuid, setActiveUuid] = useState<string | null>(localStorage.getItem('active_tenant_uuid'));
@@ -46,7 +51,7 @@ const TenantsPage: React.FC = () => {
 
   useEffect(() => {
     fetchTenants();
-  }, []);
+  }, [currentPage]);
 
   // Auto-slugging form helper
   useEffect(() => {
@@ -63,15 +68,26 @@ const TenantsPage: React.FC = () => {
   const fetchTenants = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/tenants');
+      const res = await api.get('/tenants', {
+        params: {
+          page: currentPage,
+          per_page: itemsPerPage
+        }
+      });
       if (res.data.success) {
-        setTenants(res.data.tenants);
+        setTenants(res.data.tenants.data);
+        setTotalPages(res.data.tenants.last_page);
+        setTotalTenants(res.data.tenants.total);
       }
     } catch (err: any) {
       toast.error('Failed to load tenants');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
   };
 
   const handleSelectWorkspace = (uuid: string, name: string) => {
@@ -268,6 +284,34 @@ const TenantsPage: React.FC = () => {
                 </TableBody>
               </Table>
             </div>
+            
+            {totalPages > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-6 border-t border-slate-100 dark:border-slate-800/60 mt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalTenants)} of {totalTenants} total results
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1 || loading}
+                    className="hover:bg-primary hover:text-primary-foreground transition-colors border-slate-200 dark:border-slate-800"
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages || loading}
+                    className="hover:bg-primary hover:text-primary-foreground transition-colors border-slate-200 dark:border-slate-800"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

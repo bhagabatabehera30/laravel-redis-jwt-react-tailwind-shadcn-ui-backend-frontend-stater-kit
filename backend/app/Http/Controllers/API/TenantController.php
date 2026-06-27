@@ -21,6 +21,10 @@ class TenantController extends Controller
         summary: "List all tenants",
         tags: ["Tenants"],
         security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "page", in: "query", required: false, description: "Page number", schema: new OA\Schema(type: "integer", default: 1)),
+            new OA\Parameter(name: "per_page", in: "query", required: false, description: "Items per page", schema: new OA\Schema(type: "integer", default: 10))
+        ],
         responses: [
             new OA\Response(
                 response: 200,
@@ -30,8 +34,18 @@ class TenantController extends Controller
                         new OA\Property(property: "success", type: "boolean", example: true),
                         new OA\Property(
                             property: "tenants",
-                            type: "array",
-                            items: new OA\Items(type: "object")
+                            type: "object",
+                            properties: [
+                                new OA\Property(property: "current_page", type: "integer", example: 1),
+                                new OA\Property(
+                                    property: "data",
+                                    type: "array",
+                                    items: new OA\Items(type: "object")
+                                ),
+                                new OA\Property(property: "last_page", type: "integer", example: 10),
+                                new OA\Property(property: "per_page", type: "integer", example: 10),
+                                new OA\Property(property: "total", type: "integer", example: 100),
+                            ]
                         )
                     ]
                 )
@@ -47,10 +61,12 @@ class TenantController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized to view tenants'], 403);
         }
 
+        $perPage = $request->input('per_page', 10);
+
         if ($user->isAdminAccess()) {
-            $tenants = Tenant::with('users')->get();
+            $tenants = Tenant::with('users')->paginate($perPage);
         } else {
-            $tenants = $user->tenants;
+            $tenants = $user->tenants()->paginate($perPage);
         }
 
         return response()->json([
