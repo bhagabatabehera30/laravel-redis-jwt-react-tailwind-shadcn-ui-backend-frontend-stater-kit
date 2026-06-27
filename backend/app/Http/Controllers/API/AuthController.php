@@ -168,37 +168,110 @@ class AuthController extends Controller
     {
         $user = $this->auth->user();
         $user->load(['userProfile', 'roles']);
+        
+        $userData = array_merge($user->toArray(), [
+            'is_super_admin' => $user->isAdminAccess()
+        ]);
+        
         return response()->json([
             'success' => true,
-            'user' => $user
+            'user' => $userData
+        ], 200);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $this->auth->user();
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'mobile_number' => 'nullable|string|max:20',
+            'password' => 'nullable|string|min:6',
+            'gender' => 'nullable|string',
+            'profession' => 'nullable|string',
+            'bio' => 'nullable|string',
+            'profile_pic' => 'nullable|string',
+        ]);
+
+        $user->name = $request->name;
+        $user->email = $request->email;
+        $user->mobile_number = $request->mobile_number;
+
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
+        }
+
+        $user->save();
+
+        if ($user->userProfile) {
+            $user->userProfile->update([
+                'gender' => $request->gender,
+                'profession' => $request->profession,
+                'author_bio' => $request->bio,
+                'user_pic' => $request->profile_pic,
+            ]);
+        } else {
+            $user->userProfile()->create([
+                'gender' => $request->gender,
+                'profession' => $request->profession,
+                'author_bio' => $request->bio,
+                'user_pic' => $request->profile_pic,
+            ]);
+        }
+
+        $user->load(['userProfile', 'roles']);
+        $userData = array_merge($user->toArray(), [
+            'is_super_admin' => $user->isAdminAccess()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'user' => $userData
         ], 200);
     }
 
     public function logout(Request $request)
     {
-        $user = $this->auth->user();
+        try {
+            $user = $this->auth->user();
 
-        /** @var \Tymon\JWTAuth\JWTGuard $jwt */
-        $jwt = auth('api');
-        if ($payload = $jwt->payload()) {
-            $jti = $payload->get('jti');
-            $expiresAt = $payload->get('exp');
-            if ($jti && $expiresAt) {
-                Cache::put(
-                    "revoked_jti:{$jti}",
-                    true,
-                    now()->diffInSeconds(now()->setTimestamp($expiresAt))
-                );
+            /** @var \Tymon\JWTAuth\JWTGuard $jwt */
+            $jwt = auth('api');
+            
+            if ($jwt->check() && $payload = $jwt->payload()) {
+                $jti = $payload->get('jti');
+                $expiresAt = $payload->get('exp');
+                if ($jti && $expiresAt) {
+                    Cache::put(
+                        "revoked_jti:{$jti}",
+                        true,
+                        now()->diffInSeconds(now()->setTimestamp($expiresAt))
+                    );
+                }
             }
+
+            if ($user) {
+                $user->increment('token_version');
+                $this->cacheTokenVersion($user);
+
+                DB::table('refresh_tokens')
+                    ->where('user_id', $user->id)
+                    ->delete();
+            }
+            
+            $this->auth->logout();
+        } catch (\Exception $e) {
+            // Ignore exception if token is invalid or expired
         }
 
-        $user->increment('token_version');
-        $this->cacheTokenVersion($user);
-        $this->auth->logout();
-
-        DB::table('refresh_tokens')
-            ->where('user_id', $user->id)
-            ->delete();
+        // Fallback: forcefully remove refresh token from DB by matching the cookie
+        $refreshToken = $request->cookie('refresh_token');
+        if ($refreshToken) {
+            $hashed = hash('sha256', $refreshToken);
+            DB::table('refresh_tokens')->where('token', $hashed)->delete();
+        }
 
         return $this->respondLogout();
     }
@@ -245,7 +318,17 @@ class AuthController extends Controller
 
     protected function expireRefreshCookie()
     {
-        return Cookie::forget('refresh_token');
+        return cookie(
+            'refresh_token',
+            '',
+            -2628000,
+            '/',
+            null,
+            app()->environment('production'),
+            true,
+            false,
+            'lax'
+        );
     }
 
     protected function storeRefreshToken(int $userId, string $refreshToken, Request $request): void

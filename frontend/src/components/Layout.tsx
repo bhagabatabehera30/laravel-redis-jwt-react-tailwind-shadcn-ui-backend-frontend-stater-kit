@@ -206,8 +206,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       localStorage.setItem('active_tenant_uuid', val);
                       setActiveUuid(val);
                       const t = tenants.find((tenant) => tenant.uuid === val);
-                      toast.success(`Active Workspace: ${t?.name}`);
+                      toast.success(`Switching context to: ${t?.name}`);
                       window.dispatchEvent(new Event('tenantChanged'));
+                      
+                      // Force a hard reload to ensure all data, contexts, and components 
+                      // completely reset and refetch with the new active tenant context.
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 400);
                     }}
                   >
                     <SelectTrigger className="w-[140px] md:w-[170px] h-8 bg-transparent border-slate-200 dark:border-slate-800 focus:ring-0 text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -290,13 +296,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-profile" className="cursor-pointer w-full flex items-center">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings" className="cursor-pointer w-full flex items-center">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={logout}>

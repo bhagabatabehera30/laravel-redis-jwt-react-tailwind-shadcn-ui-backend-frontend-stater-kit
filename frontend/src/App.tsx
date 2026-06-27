@@ -5,6 +5,7 @@ import DashboardPage from './pages/DashboardPage';
 import UserList from './pages/users/UserList'; // Force-refresh TS mapping
 import UserFormPage from './pages/users/UserFormPage';
 import UserSettings from './pages/settings/UserSettings';
+import RolePermissionsPage from './pages/settings/RolePermissionsPage';
 import MyProfilePage from './pages/users/MyProfilePage';
 import TenantsPage from './pages/tenants/TenantsPage';
 
@@ -23,6 +24,7 @@ function App() {
         <Route path="/users/add" element={<UserFormPage />} />
         <Route path="/users/edit/:id" element={<UserFormPage />} />
         <Route path="/settings" element={<UserSettings />} />
+        <Route path="/settings/roles" element={<RolePermissionsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

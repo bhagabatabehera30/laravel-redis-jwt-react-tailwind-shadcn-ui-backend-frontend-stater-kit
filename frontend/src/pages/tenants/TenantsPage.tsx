@@ -23,7 +23,7 @@ export interface Tenant {
 
 const TenantsPage: React.FC = () => {
   const { user } = useAuth();
-  const isSuperAdmin = user?.roles?.some((r: any) => r.name === 'Super Admin') || false;
+  const isSuperAdmin = user?.is_super_admin || user?.roles?.some((r: any) => r.name === 'Super Admin') || user?.role === 'Super Admin' || false;
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,6 +37,12 @@ const TenantsPage: React.FC = () => {
   const [formName, setFormName] = useState('');
   const [formSlug, setFormSlug] = useState('');
   const [formDomain, setFormDomain] = useState('');
+
+  // Primary Owner states (only for creation)
+  const [ownerFirstName, setOwnerFirstName] = useState('');
+  const [ownerLastName, setOwnerLastName] = useState('');
+  const [ownerEmail, setOwnerEmail] = useState('');
+  const [ownerPassword, setOwnerPassword] = useState('');
 
   useEffect(() => {
     fetchTenants();
@@ -80,6 +86,10 @@ const TenantsPage: React.FC = () => {
     setFormName('');
     setFormSlug('');
     setFormDomain('');
+    setOwnerFirstName('');
+    setOwnerLastName('');
+    setOwnerEmail('');
+    setOwnerPassword('');
     setIsModalOpen(true);
   };
 
@@ -115,6 +125,10 @@ const TenantsPage: React.FC = () => {
           name: formName,
           slug: formSlug,
           domain: formDomain || null,
+          owner_first_name: ownerFirstName,
+          owner_last_name: ownerLastName,
+          owner_email: ownerEmail,
+          owner_password: ownerPassword,
         });
         if (res.data.success) {
           toast.success('New workspace created successfully!');
@@ -306,6 +320,55 @@ const TenantsPage: React.FC = () => {
                     disabled={!isSuperAdmin}
                   />
                 </div>
+
+                {!editingTenant && (
+                  <div className="pt-4 mt-2 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Primary Owner Account</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">First Name</label>
+                        <Input
+                          type="text"
+                          value={ownerFirstName}
+                          onChange={(e) => setOwnerFirstName(e.target.value)}
+                          placeholder="John"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Name</label>
+                        <Input
+                          type="text"
+                          value={ownerLastName}
+                          onChange={(e) => setOwnerLastName(e.target.value)}
+                          placeholder="Doe"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Email Address</label>
+                      <Input
+                        type="email"
+                        value={ownerEmail}
+                        onChange={(e) => setOwnerEmail(e.target.value)}
+                        placeholder="john@acme.com"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Temporary Password</label>
+                      <Input
+                        type="password"
+                        value={ownerPassword}
+                        onChange={(e) => setOwnerPassword(e.target.value)}
+                        placeholder="Min. 6 characters"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
                   <Button type="button" variant="outline" className="border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setIsModalOpen(false)}>

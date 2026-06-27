@@ -26,11 +26,13 @@ class DatabaseSeeder extends Seeder
             }
         }
 
+        $superAdminRole = Role::firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'api']);
         $ownerRole = Role::firstOrCreate(['name' => 'Owner', 'guard_name' => 'api']);
         $adminRole = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'api']);
         $userRole = Role::firstOrCreate(['name' => 'User', 'guard_name' => 'api']);
 
-        // Owner role has full tenant workspace management permissions
+        // Super Admin & Owner roles have full tenant workspace management permissions globally
+        $superAdminRole->syncPermissions($allPermissions);
         $ownerRole->syncPermissions($allPermissions);
 
         // Admin role has all permissions except dangerous tenant deletion and global super admin actions
@@ -51,20 +53,14 @@ class DatabaseSeeder extends Seeder
             'status' => 1,
         ]);
 
-        // 3. Default Frontend Admin User (Active status = 1)
+        // 3. Default Frontend Admin User (Active status = 1, Global Super Admin, no tenant linkage)
         $adminUser = User::factory()->create([
-            'name' => 'Admin User',
+            'name' => 'Super Admin',
             'email' => 'admin@test.com',
             'password' => 'Abc@123456',
             'status' => 1,
         ]);
-
-        // Link Admin to Default Tenant with Owner Role
-        TenantUser::create([
-            'tenant_id' => $tenant->id,
-            'user_id' => $adminUser->id,
-            'role_id' => $ownerRole->id,
-        ]);
+        $adminUser->assignRole($superAdminRole);
 
         // 4. Secondary Test User (Active status = 1)
         $testUser = User::factory()->create([

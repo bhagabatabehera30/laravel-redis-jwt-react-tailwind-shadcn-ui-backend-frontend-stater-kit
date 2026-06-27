@@ -116,13 +116,34 @@ const MyProfilePage: React.FC = () => {
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+
+    if (formData.password && formData.password !== formData.confirm_password) {
+      setErrors({ confirm_password: 'Passwords do not match' });
+      return;
+    }
+
     setIsSaving(true);
     
-    // Simulate Profile save for demo consistency
     try {
-      toast.success('Profile details updated successfully!');
+      const payload: any = { ...formData };
+      if (!payload.password) {
+        delete payload.password;
+      }
+      delete payload.confirm_password;
+
+      const res = await api.put('/auth/profile', payload);
+      if (res.data.success) {
+        toast.success('Profile details updated successfully!');
+        // Refresh local user state if needed or rely on AuthContext if implemented
+      }
     } catch (err: any) {
-      toast.error('Failed to save profile changes');
+      if (err.response?.status === 422) {
+        setErrors(err.response.data.errors || {});
+        toast.error('Please check the form for errors');
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to save profile changes');
+      }
     } finally {
       setIsSaving(false);
     }

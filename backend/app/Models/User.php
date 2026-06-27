@@ -21,6 +21,7 @@ class User extends Authenticatable implements JWTSubject
     use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
 
+    protected $guard_name = 'api';
     protected $dates = ['deleted_at'];
 
     protected static function boot()
@@ -104,7 +105,7 @@ class User extends Authenticatable implements JWTSubject
 
     public function isAdminAccess()
     {
-        return $this->hasRole('Super Admin');
+        return $this->hasRole('Super Admin') || ($this->hasRole('Owner') && $this->tenants()->count() === 0);
     }
     public function can($abilities, $arguments = [])
     {

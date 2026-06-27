@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
 import { Upload, ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../../services/api';
 
 export interface UserFormData {
   id?: number | string;
@@ -36,7 +37,7 @@ const emptyUser: UserFormData = {
   profile_pic: '',
   password: '',
   confirm_password: '',
-  gender: '',
+  gender: 'male',
   profession: '',
   bio: '',
   role: 'User'
@@ -50,31 +51,59 @@ const UserFormPage: React.FC = () => {
   const [formData, setFormData] = useState<UserFormData>(emptyUser);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(isEditMode);
+  const [roles, setRoles] = useState<{ id: number, name: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Simulate fetching user from backend
+    fetchRoles();
     if (isEditMode) {
-      setTimeout(() => {
-        setFormData({
-          id: id,
-          first_name: 'John',
-          last_name: 'Doe',
-          email: 'john@example.com',
-          mobile: '+1 (555) 123-4567',
-          status: '1',
-          profile_pic: '',
-          password: '',
-          confirm_password: '',
-          gender: 'male',
-          profession: 'Senior Developer',
-          bio: 'Expert architect integrating scalable systems.',
-          role: 'Admin'
-        });
-        setIsLoading(false);
-      }, 600);
+      fetchUser();
     }
   }, [id, isEditMode]);
+
+  const fetchRoles = async () => {
+    try {
+      const response = await api.get('/roles');
+      if (response.data.success) {
+        setRoles(response.data.roles);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch available roles');
+    }
+  };
+
+  const fetchUser = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get(`/users/${id}`);
+      if (response.data.success) {
+        const user = response.data.user;
+        setFormData({
+          id: user.id,
+          first_name: user.first_name || '',
+          last_name: user.last_name || '',
+          email: user.email || '',
+          mobile: user.mobile || '',
+          status: String(user.status) || '1',
+          profile_pic: user.profile_pic || '',
+          password: '',
+          confirm_password: '',
+          gender: user.gender || 'male',
+          profession: user.profession || '',
+          bio: user.bio || '',
+          role: user.role || 'User'
+        });
+      } else {
+        toast.error('User not found');
+        navigate('/users');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error fetching user');
+      navigate('/users');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -122,14 +151,26 @@ const UserFormPage: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      // Simulate API POST payload successfully returning
-      toast.success(isEditMode ? 'User modified successfully!' : 'User created successfully!');
-      setTimeout(() => {
-        navigate('/users');
-      }, 800);
+      try {
+        let response;
+        if (isEditMode) {
+          response = await api.put(`/users/${id}`, formData);
+        } else {
+          response = await api.post('/users', formData);
+        }
+
+        if (response.data.success) {
+          toast.success(isEditMode ? 'User modified successfully!' : 'User created successfully!');
+          navigate('/users');
+        } else {
+          toast.error(response.data.message || 'Operation failed');
+        }
+      } catch (error: any) {
+        toast.error(error.response?.data?.message || 'An error occurred during submission.');
+      }
     } else {
       toast.error('Please correct the validation errors below.');
     }
@@ -230,17 +271,31 @@ const UserFormPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Profile & Status</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <h3 className="text-lg font-semibold border-b pb-2">Profile, Role & Status</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="space-y-2">
                       <Label>Status</Label>
-                      <Select value={formData.status} onValueChange={(v) => handleSelectChange('status', v)}>
+                      <Select value={String(formData.status)} onValueChange={(v) => handleSelectChange('status', v)}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="1">Active</SelectItem>
                           <SelectItem value="0">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Role <span className="text-red-500">*</span></Label>
+                      <Select value={formData.role} onValueChange={(v) => handleSelectChange('role', v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roles.map(role => (
+                            <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

@@ -19,6 +19,10 @@ class TenantController extends Controller
     {
         $user = auth('api')->user();
 
+        if (!$user->isAdminAccess() && !$user->canAny(['api.tenant.view'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized to view tenants'], 403);
+        }
+
         if ($user->isAdminAccess()) {
             $tenants = Tenant::with('users')->get();
         } else {
@@ -41,9 +45,17 @@ class TenantController extends Controller
             'slug' => 'required|string|max:100|unique:tenants,slug',
             'domain' => 'nullable|string|max:255|unique:tenants,domain',
             'settings' => 'nullable|array',
+            'owner_first_name' => 'required|string|max:255',
+            'owner_last_name' => 'required|string|max:255',
+            'owner_email' => 'required|email|unique:users,email',
+            'owner_password' => 'required|string|min:6',
         ]);
 
         $user = auth('api')->user();
+
+        if (!$user->isAdminAccess() && !$user->canAny(['api.tenant.create'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized to create tenants'], 403);
+        }
 
         $tenant = Tenant::create([
             'uuid' => (string) Str::uuid(),
@@ -54,11 +66,26 @@ class TenantController extends Controller
             'status' => 1, // active by default
         ]);
 
-        // Automatically assign creating user as the 'Owner' of the tenant
+        // Create the primary owner user account
+        $ownerUser = \App\Models\User::create([
+            'name' => $request->owner_first_name . ' ' . $request->owner_last_name,
+            'email' => $request->owner_email,
+            'password' => \Illuminate\Support\Facades\Hash::make($request->owner_password),
+            'status' => 1,
+            'uuid' => (string) Str::uuid(),
+        ]);
+
+        \App\Models\UserProfile::create([
+            'user_id' => $ownerUser->id,
+            'first_name' => $request->owner_first_name,
+            'last_name' => $request->owner_last_name,
+        ]);
+
+        // Automatically assign the newly created user as the 'Owner' of the tenant
         $ownerRole = Role::firstOrCreate(['name' => 'Owner', 'guard_name' => 'api']);
         TenantUser::create([
             'tenant_id' => $tenant->id,
-            'user_id' => $user->id,
+            'user_id' => $ownerUser->id,
             'role_id' => $ownerRole->id,
         ]);
 
@@ -78,11 +105,13 @@ class TenantController extends Controller
         $user = auth('api')->user();
 
         // Check if user has access to this tenant
-        if (!$user->isAdminAccess() && !$user->tenants->contains($tenant->id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized access to this tenant workspace'
-            ], 403);
+        if (!$user->isAdminAccess()) {
+            if (!$user->tenants->contains($tenant->id) && !$user->canAny(['api.tenant.view'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized access to this tenant workspace'
+                ], 403);
+            }
         }
 
         return response()->json([

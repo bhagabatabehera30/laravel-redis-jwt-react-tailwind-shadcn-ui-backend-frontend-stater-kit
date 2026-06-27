@@ -119,7 +119,11 @@ const logoutIfTokenExpired = async () => {
     }
     // Clear memory token
     setAccessToken(null);
-    window.location.href = '/login';
+    
+    // Only redirect/reload if the user is deep inside a protected route (not on root / or /login)
+    if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.location.href = '/';
+    }
 };
 
 export default api;
