@@ -8,6 +8,7 @@ use App\Models\TenantUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
+use OpenApi\Attributes as OA;
 
 class TenantController extends Controller
 {
@@ -15,6 +16,29 @@ class TenantController extends Controller
     /**
      * Display a listing of tenants.
      */
+    #[OA\Get(
+        path: "/api/v1/tenants",
+        summary: "List all tenants",
+        tags: ["Tenants"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "List of tenants retrieved",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(
+                            property: "tenants",
+                            type: "array",
+                            items: new OA\Items(type: "object")
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized")
+        ]
+    )]
     public function index(Request $request)
     {
         $user = auth('api')->user();
@@ -38,6 +62,42 @@ class TenantController extends Controller
     /**
      * Store a newly created tenant.
      */
+    #[OA\Post(
+        path: "/api/v1/tenants",
+        summary: "Create a new tenant",
+        tags: ["Tenants"],
+        security: [["bearerAuth" => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["name", "slug", "owner_first_name", "owner_last_name", "owner_email", "owner_password"],
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "Acme Corp"),
+                    new OA\Property(property: "slug", type: "string", example: "acme-corp"),
+                    new OA\Property(property: "domain", type: "string", example: "acme.saas.com", nullable: true),
+                    new OA\Property(property: "owner_first_name", type: "string", example: "John"),
+                    new OA\Property(property: "owner_last_name", type: "string", example: "Doe"),
+                    new OA\Property(property: "owner_email", type: "string", format: "email"),
+                    new OA\Property(property: "owner_password", type: "string", format: "password")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 201,
+                description: "Tenant created successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "tenant", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 422, description: "Validation error")
+        ]
+    )]
     public function store(Request $request)
     {
         $request->validate([
@@ -99,6 +159,29 @@ class TenantController extends Controller
     /**
      * Display the specified tenant.
      */
+    #[OA\Get(
+        path: "/api/v1/tenants/{tenant}",
+        summary: "Get specific tenant details",
+        tags: ["Tenants"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "tenant", in: "path", required: true, description: "Tenant UUID", schema: new OA\Schema(type: "string"))
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Tenant details retrieved",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "tenant", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function show($uuid)
     {
         $tenant = Tenant::where('uuid', $uuid)->firstOrFail();
@@ -123,6 +206,41 @@ class TenantController extends Controller
     /**
      * Update the specified tenant.
      */
+    #[OA\Put(
+        path: "/api/v1/tenants/{tenant}",
+        summary: "Update specific tenant",
+        tags: ["Tenants"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "tenant", in: "path", required: true, description: "Tenant UUID", schema: new OA\Schema(type: "string"))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: "name", type: "string"),
+                    new OA\Property(property: "slug", type: "string"),
+                    new OA\Property(property: "domain", type: "string", nullable: true),
+                    new OA\Property(property: "status", type: "integer")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Tenant updated successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "tenant", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function update(Request $request, $uuid)
     {
         $tenant = Tenant::where('uuid', $uuid)->firstOrFail();
@@ -170,6 +288,29 @@ class TenantController extends Controller
     /**
      * Remove the specified tenant.
      */
+    #[OA\Delete(
+        path: "/api/v1/tenants/{tenant}",
+        summary: "Delete specific tenant",
+        tags: ["Tenants"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "tenant", in: "path", required: true, description: "Tenant UUID", schema: new OA\Schema(type: "string"))
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Tenant deleted successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function destroy($uuid)
     {
         $tenant = Tenant::where('uuid', $uuid)->firstOrFail();

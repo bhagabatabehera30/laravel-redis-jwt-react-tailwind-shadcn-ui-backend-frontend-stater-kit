@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\DB;
+use OpenApi\Attributes as OA;
 
 class RoleController extends Controller
 {
@@ -24,6 +25,29 @@ class RoleController extends Controller
         return $user->can('api.role.view'); // or whatever custom logic if tenant-based
     }
 
+    #[OA\Get(
+        path: "/api/v1/roles",
+        summary: "List all roles",
+        tags: ["Roles & Permissions"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "List of roles retrieved",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(
+                            property: "roles",
+                            type: "array",
+                            items: new OA\Items(type: "object")
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized")
+        ]
+    )]
     public function index()
     {
         $user = auth('api')->user();
@@ -38,6 +62,41 @@ class RoleController extends Controller
         ]);
     }
 
+    #[OA\Post(
+        path: "/api/v1/roles",
+        summary: "Create a new role",
+        tags: ["Roles & Permissions"],
+        security: [["bearerAuth" => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["name"],
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "Manager"),
+                    new OA\Property(
+                        property: "permissions",
+                        type: "array",
+                        items: new OA\Items(type: "string")
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 201,
+                description: "Role created successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "role", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 422, description: "Validation error")
+        ]
+    )]
     public function store(Request $request)
     {
         $user = auth('api')->user();
@@ -63,6 +122,29 @@ class RoleController extends Controller
         ], 201);
     }
 
+    #[OA\Get(
+        path: "/api/v1/roles/{role}",
+        summary: "Get specific role details",
+        tags: ["Roles & Permissions"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "role", in: "path", required: true, description: "Role ID", schema: new OA\Schema(type: "integer"))
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Role details retrieved",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "role", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function show($id)
     {
         $user = auth('api')->user();
@@ -77,6 +159,44 @@ class RoleController extends Controller
         ]);
     }
 
+    #[OA\Put(
+        path: "/api/v1/roles/{role}",
+        summary: "Update specific role",
+        tags: ["Roles & Permissions"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "role", in: "path", required: true, description: "Role ID", schema: new OA\Schema(type: "integer"))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["name"],
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "Manager"),
+                    new OA\Property(
+                        property: "permissions",
+                        type: "array",
+                        items: new OA\Items(type: "string")
+                    )
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Role updated successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "role", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function update(Request $request, $id)
     {
         $user = auth('api')->user();
@@ -110,6 +230,29 @@ class RoleController extends Controller
         ]);
     }
 
+    #[OA\Delete(
+        path: "/api/v1/roles/{role}",
+        summary: "Delete specific role",
+        tags: ["Roles & Permissions"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "role", in: "path", required: true, description: "Role ID", schema: new OA\Schema(type: "integer"))
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Role deleted successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function destroy($id)
     {
         $user = auth('api')->user();
@@ -132,6 +275,28 @@ class RoleController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: "/api/v1/permissions",
+        summary: "List all available permissions",
+        tags: ["Roles & Permissions"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "List of permissions retrieved",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(
+                            property: "permissions",
+                            type: "object"
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized")
+        ]
+    )]
     public function permissions()
     {
         $user = auth('api')->user();

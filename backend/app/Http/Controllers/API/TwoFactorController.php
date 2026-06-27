@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use App\Contracts\AuthServiceInterface;
 use PragmaRX\Google2FA\Google2FA;
+use OpenApi\Attributes as OA;
 
 class TwoFactorController extends Controller
 {
@@ -24,6 +25,28 @@ class TwoFactorController extends Controller
     /**
      * Enable Two-Factor Authentication (TFA) - Stage 1: Generate Google Authenticator Secret & QR code
      */
+    #[OA\Post(
+        path: "/api/v1/auth/tfa/enable",
+        summary: "Enable Two-Factor Authentication (Stage 1)",
+        tags: ["Two-Factor Auth"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "TFA Secret generated",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "secret", type: "string"),
+                        new OA\Property(property: "qr_code_url", type: "string"),
+                        new OA\Property(property: "current_otp", type: "string")
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     public function enable(Request $request)
     {
         $user = auth('api')->user();
@@ -58,6 +81,41 @@ class TwoFactorController extends Controller
     /**
      * Confirm TFA - Stage 2: Verify TOTP code and activate
      */
+    #[OA\Post(
+        path: "/api/v1/auth/tfa/confirm",
+        summary: "Confirm Two-Factor Authentication (Stage 2)",
+        tags: ["Two-Factor Auth"],
+        security: [["bearerAuth" => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["code"],
+                properties: [
+                    new OA\Property(property: "code", type: "string", example: "123456")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "TFA Confirmed and Activated",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(
+                            property: "recovery_codes",
+                            type: "array",
+                            items: new OA\Items(type: "string")
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(response: 400, description: "TFA secret not generated"),
+            new OA\Response(response: 422, description: "Invalid code"),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     public function confirm(Request $request)
     {
         $request->validate([
@@ -104,6 +162,25 @@ class TwoFactorController extends Controller
     /**
      * Disable TFA
      */
+    #[OA\Post(
+        path: "/api/v1/auth/tfa/disable",
+        summary: "Disable Two-Factor Authentication",
+        tags: ["Two-Factor Auth"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "TFA Disabled successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string")
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     public function disable(Request $request)
     {
         $user = auth('api')->user();
@@ -123,6 +200,37 @@ class TwoFactorController extends Controller
     /**
      * Verify TOTP code during login challenge
      */
+    #[OA\Post(
+        path: "/api/v1/auth/tfa/verify",
+        summary: "Verify TFA code during login challenge",
+        tags: ["Two-Factor Auth"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["tfa_token", "code"],
+                properties: [
+                    new OA\Property(property: "tfa_token", type: "string"),
+                    new OA\Property(property: "code", type: "string", example: "123456")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Verification successful, returns tokens",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "access_token", type: "string"),
+                        new OA\Property(property: "token_type", type: "string", example: "bearer"),
+                        new OA\Property(property: "expires_in", type: "integer")
+                    ]
+                )
+            ),
+            new OA\Response(response: 400, description: "User not configured for TFA"),
+            new OA\Response(response: 422, description: "Invalid code or challenge session")
+        ]
+    )]
     public function verify(Request $request)
     {
         $request->validate([

@@ -14,6 +14,7 @@ use App\Models\TenantUser;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Cache;
 use App\Contracts\AuthServiceInterface;
+use OpenApi\Attributes as OA;
 
 
 class AuthController extends Controller
@@ -22,6 +23,41 @@ class AuthController extends Controller
         protected AuthServiceInterface $auth
     ) {}
 
+    #[OA\Post(
+        path: "/api/v1/auth/register",
+        summary: "Register a new user",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["name", "email", "password"],
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "John Doe"),
+                    new OA\Property(property: "email", type: "string", format: "email", example: "john@example.com"),
+                    new OA\Property(property: "password", type: "string", format: "password", example: "password"),
+                    new OA\Property(property: "mobile_number", type: "string", example: "+1234567890", nullable: true),
+                    new OA\Property(property: "tenant_name", type: "string", example: "My Company", nullable: true),
+                    new OA\Property(property: "tenant_slug", type: "string", example: "my-company", nullable: true),
+                    new OA\Property(property: "tenant_domain", type: "string", example: "mycompany.saas.com", nullable: true)
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 201,
+                description: "User registered successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string", example: "User registered successfully"),
+                        new OA\Property(property: "user", type: "object"),
+                        new OA\Property(property: "tenant", type: "object", nullable: true)
+                    ]
+                )
+            ),
+            new OA\Response(response: 422, description: "Validation error")
+        ]
+    )]
     public function register(Request $request)
     {
         $request->validate([
@@ -68,6 +104,37 @@ class AuthController extends Controller
         ], 201);
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/login",
+        summary: "User Login",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["email", "password"],
+                properties: [
+                    new OA\Property(property: "email", type: "string", format: "email", example: "admin@test.com"),
+                    new OA\Property(property: "password", type: "string", format: "password", example: "password")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Successful Login",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "access_token", type: "string", example: "eyJ0eXAi..."),
+                        new OA\Property(property: "token_type", type: "string", example: "bearer"),
+                        new OA\Property(property: "expires_in", type: "integer", example: 3600)
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: "Unauthorized"),
+            new OA\Response(response: 202, description: "TFA Challenge required")
+        ]
+    )]
     public function login(Request $request)
     {
         $request->validate([
@@ -122,6 +189,35 @@ class AuthController extends Controller
         return $this->respondWithToken($accessToken, $refreshToken);
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/refresh",
+        summary: "Refresh access token",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: false,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: "refresh_token", type: "string", description: "Optional if passed via cookie")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Token refreshed successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "access_token", type: "string"),
+                        new OA\Property(property: "token_type", type: "string", example: "bearer"),
+                        new OA\Property(property: "expires_in", type: "integer")
+                    ]
+                )
+            ),
+            new OA\Response(response: 400, description: "Refresh token not provided"),
+            new OA\Response(response: 401, description: "Invalid or expired refresh token")
+        ]
+    )]
     public function refresh(Request $request)
     {
         $refreshToken = $request->cookie('refresh_token') ?? $request->input('refresh_token');
@@ -164,6 +260,25 @@ class AuthController extends Controller
         return $this->respondWithToken($accessToken, $newRefreshToken);
     }
 
+    #[OA\Get(
+        path: "/api/v1/auth/me",
+        summary: "Get current authenticated user profile",
+        tags: ["Authentication"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "User details retrieved successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "user", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     public function me()
     {
         $user = $this->auth->user();
@@ -179,6 +294,43 @@ class AuthController extends Controller
         ], 200);
     }
 
+    #[OA\Put(
+        path: "/api/v1/auth/profile",
+        summary: "Update current user profile",
+        tags: ["Authentication"],
+        security: [["bearerAuth" => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["name", "email"],
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "John Doe"),
+                    new OA\Property(property: "email", type: "string", format: "email"),
+                    new OA\Property(property: "mobile_number", type: "string", nullable: true),
+                    new OA\Property(property: "password", type: "string", format: "password", nullable: true),
+                    new OA\Property(property: "gender", type: "string", nullable: true),
+                    new OA\Property(property: "profession", type: "string", nullable: true),
+                    new OA\Property(property: "bio", type: "string", nullable: true),
+                    new OA\Property(property: "profile_pic", type: "string", nullable: true)
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Profile updated successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string", example: "Profile updated successfully"),
+                        new OA\Property(property: "user", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 422, description: "Validation error"),
+            new OA\Response(response: 401, description: "Unauthenticated")
+        ]
+    )]
     public function updateProfile(Request $request)
     {
         $user = $this->auth->user();
@@ -232,6 +384,24 @@ class AuthController extends Controller
         ], 200);
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/logout",
+        summary: "Logout the user",
+        tags: ["Authentication"],
+        security: [["bearerAuth" => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Successfully logged out",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string", example: "Successfully logged out")
+                    ]
+                )
+            )
+        ]
+    )]
     public function logout(Request $request)
     {
         try {

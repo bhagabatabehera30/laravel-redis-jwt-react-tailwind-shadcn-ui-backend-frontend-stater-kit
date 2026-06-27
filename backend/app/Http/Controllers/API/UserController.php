@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OA;
 
 class UserController extends Controller
 {
@@ -32,6 +33,32 @@ class UserController extends Controller
         return $hasPermission;
     }
 
+    #[OA\Get(
+        path: "/api/v1/users",
+        summary: "List all users in the current active tenant",
+        tags: ["Users"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "X-Tenant-Id", in: "header", required: false, description: "Optional UUID of the tenant context", schema: new OA\Schema(type: "string"))
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "List of users retrieved",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(
+                            property: "users",
+                            type: "array",
+                            items: new OA\Items(type: "object")
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized")
+        ]
+    )]
     public function index(Request $request)
     {
         $tenant = $this->getTenant($request);
@@ -79,6 +106,49 @@ class UserController extends Controller
         ]);
     }
 
+    #[OA\Post(
+        path: "/api/v1/users",
+        summary: "Add a new user to the tenant",
+        tags: ["Users"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "X-Tenant-Id", in: "header", required: false, description: "Optional UUID of the tenant context", schema: new OA\Schema(type: "string"))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["first_name", "last_name", "email", "mobile", "password", "status", "role"],
+                properties: [
+                    new OA\Property(property: "first_name", type: "string", example: "John"),
+                    new OA\Property(property: "last_name", type: "string", example: "Doe"),
+                    new OA\Property(property: "email", type: "string", format: "email"),
+                    new OA\Property(property: "mobile", type: "string"),
+                    new OA\Property(property: "password", type: "string", format: "password"),
+                    new OA\Property(property: "status", type: "integer", example: 1),
+                    new OA\Property(property: "role", type: "string", example: "Admin"),
+                    new OA\Property(property: "gender", type: "string", nullable: true),
+                    new OA\Property(property: "profession", type: "string", nullable: true),
+                    new OA\Property(property: "bio", type: "string", nullable: true),
+                    new OA\Property(property: "profile_pic", type: "string", nullable: true)
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 201,
+                description: "User created successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "user", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 422, description: "Validation error")
+        ]
+    )]
     public function store(Request $request)
     {
         $tenant = $this->getTenant($request);
@@ -147,6 +217,30 @@ class UserController extends Controller
         ], 201);
     }
 
+    #[OA\Get(
+        path: "/api/v1/users/{user}",
+        summary: "Get specific user details",
+        tags: ["Users"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "user", in: "path", required: true, description: "User ID", schema: new OA\Schema(type: "integer")),
+            new OA\Parameter(name: "X-Tenant-Id", in: "header", required: false, description: "Optional UUID of the tenant context", schema: new OA\Schema(type: "string"))
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "User details retrieved",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "user", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function show(Request $request, $id)
     {
         $tenant = $this->getTenant($request);
@@ -192,6 +286,45 @@ class UserController extends Controller
         ]);
     }
 
+    #[OA\Put(
+        path: "/api/v1/users/{user}",
+        summary: "Update user details",
+        tags: ["Users"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "user", in: "path", required: true, description: "User ID", schema: new OA\Schema(type: "integer")),
+            new OA\Parameter(name: "X-Tenant-Id", in: "header", required: false, description: "Optional UUID of the tenant context", schema: new OA\Schema(type: "string"))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: "first_name", type: "string"),
+                    new OA\Property(property: "last_name", type: "string"),
+                    new OA\Property(property: "email", type: "string", format: "email"),
+                    new OA\Property(property: "mobile", type: "string"),
+                    new OA\Property(property: "status", type: "integer"),
+                    new OA\Property(property: "role", type: "string"),
+                    new OA\Property(property: "password", type: "string", format: "password", nullable: true)
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "User updated successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "user", type: "object")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function update(Request $request, $id)
     {
         $tenant = $this->getTenant($request);
@@ -273,6 +406,30 @@ class UserController extends Controller
         ]);
     }
 
+    #[OA\Delete(
+        path: "/api/v1/users/{user}",
+        summary: "Remove user from tenant",
+        tags: ["Users"],
+        security: [["bearerAuth" => []]],
+        parameters: [
+            new OA\Parameter(name: "user", in: "path", required: true, description: "User ID", schema: new OA\Schema(type: "integer")),
+            new OA\Parameter(name: "X-Tenant-Id", in: "header", required: false, description: "Optional UUID of the tenant context", schema: new OA\Schema(type: "string"))
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "User removed successfully",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "success", type: "boolean", example: true),
+                        new OA\Property(property: "message", type: "string")
+                    ]
+                )
+            ),
+            new OA\Response(response: 403, description: "Unauthorized"),
+            new OA\Response(response: 404, description: "Not found")
+        ]
+    )]
     public function destroy(Request $request, $id)
     {
         $tenant = $this->getTenant($request);
