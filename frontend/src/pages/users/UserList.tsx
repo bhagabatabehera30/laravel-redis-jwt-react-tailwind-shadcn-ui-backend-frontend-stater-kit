@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
@@ -8,7 +8,9 @@ import { Button } from '../../components/ui/button';
 import { Loader } from '../../components/ui/loader';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Users, Search, Plus, Edit2 } from 'lucide-react';
+import { Users, Search, Plus, Edit2, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import api from '../../services/api';
 
 export interface User {
   id: number;
@@ -24,19 +26,13 @@ export interface User {
   role: string;
 }
 
-const mockComplexUsers: User[] = [
-  { id: 1, first_name: 'John', last_name: 'Doe', email: 'john@example.com', mobile: '+1 (555) 123-4567', status: '1', profile_pic: '', gender: 'male', profession: 'Engineer', bio: '', role: 'Admin' },
-  { id: 2, first_name: 'Jane', last_name: 'Smith', email: 'jane@example.com', mobile: '+1 (555) 987-6543', status: '1', profile_pic: '', gender: 'female', profession: 'Designer', bio: '', role: 'User' },
-  { id: 3, first_name: 'Bob', last_name: 'Johnson', email: 'bob@example.com', mobile: '+1 (555) 555-5555', status: '0', profile_pic: '', gender: 'male', profession: 'Manager', bio: '', role: 'User' },
-  { id: 4, first_name: 'Alice', last_name: 'Brown', email: 'alice@example.com', mobile: '+1 (555) 111-2222', status: '1', profile_pic: '', gender: 'female', profession: 'Developer', bio: '', role: 'Moderator' },
-  { id: 5, first_name: 'Charlie', last_name: 'Wilson', email: 'charlie@example.com', mobile: '+1 (555) 333-4444', status: '1', profile_pic: '', gender: 'male', profession: 'Analyst', bio: '', role: 'User' },
-];
-
 const UserList: React.FC = () => {
   const navigate = useNavigate();
-  const [users] = useState<User[]>(mockComplexUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isFetching, setIsFetching] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [isFetching, setIsFetching] = useState(true);
 
   // Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,29 +40,58 @@ const UserList: React.FC = () => {
 
   const itemsPerPage = 6;
 
-  // Filter Logic securely
-  const filteredUsers = useMemo(() => {
-    return users.filter(user => {
-      const matchesSearch = 
-        `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.email.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-      
-      return matchesSearch && matchesStatus;
-    });
-  }, [users, searchQuery, statusFilter]);
+  useEffect(() => {
+    // Add a slight debounce for search queries
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [currentPage, searchQuery, statusFilter]);
 
-  // Pagination Logic
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const handlePageChange = (newPage: number) => {
+  const fetchUsers = async () => {
     setIsFetching(true);
-    setTimeout(() => {
-      setCurrentPage(newPage);
+    try {
+      const response = await api.get('/users', {
+        params: {
+          page: currentPage,
+          per_page: itemsPerPage,
+          search: searchQuery,
+          status: statusFilter
+        }
+      });
+      if (response.data.success) {
+        setUsers(response.data.users.data);
+        setTotalPages(response.data.users.last_page);
+        setTotalUsers(response.data.users.total);
+      } else {
+        toast.error('Failed to load users');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error loading users');
+    } finally {
       setIsFetching(false);
-    }, 400);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to remove this user from the tenant?')) return;
+    
+    setIsFetching(true);
+    try {
+      const response = await api.delete(`/users/${id}`);
+      if (response.data.success) {
+        toast.success('User removed successfully');
+        fetchUsers();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to remove user');
+      setIsFetching(false);
+    }
+  };
+
+  // Pagination Logic handled by server.
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
   };
 
   return (
@@ -126,12 +151,12 @@ const UserList: React.FC = () => {
                     <TableHead className="font-semibold min-w-[200px]">Email & Mobile</TableHead>
                     <TableHead className="font-semibold min-w-[100px]">Role</TableHead>
                     <TableHead className="font-semibold min-w-[100px]">Status</TableHead>
-                    <TableHead className="font-semibold min-w-[80px] text-right">Actions</TableHead>
+                    <TableHead className="font-semibold min-w-[120px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedUsers.length > 0 ? (
-                    paginatedUsers.map((user) => (
+                  {users.length > 0 ? (
+                    users.map((user) => (
                       <TableRow key={user.id} className="hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium">
                           <div className="flex flex-col">
@@ -147,13 +172,16 @@ const UserList: React.FC = () => {
                         </TableCell>
                         <TableCell>{user.role}</TableCell>
                         <TableCell>
-                          <Badge variant={user.status === '1' ? 'default' : 'secondary'} className={user.status === '1' ? 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 shadow-none border-0' : 'shadow-none border-0'}>
-                            {user.status === '1' ? 'Active' : 'Inactive'}
+                          <Badge variant={String(user.status) === '1' ? 'default' : 'secondary'} className={String(user.status) === '1' ? 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 shadow-none border-0' : 'shadow-none border-0'}>
+                            {String(user.status) === '1' ? 'Active' : 'Inactive'}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => navigate(`/users/edit/${user.id}`)} className="hover:text-primary hover:bg-primary/10 transition-colors h-8 w-8">
+                          <Button variant="ghost" size="icon" onClick={() => navigate(`/users/edit/${user.id}`)} className="hover:text-primary hover:bg-primary/10 transition-colors h-8 w-8 mr-1">
                             <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)} className="hover:text-red-500 hover:bg-red-50 transition-colors h-8 w-8">
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -161,7 +189,7 @@ const UserList: React.FC = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No users found matching your filters.
+                        {isFetching ? 'Loading users...' : 'No users found matching your filters.'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -172,7 +200,7 @@ const UserList: React.FC = () => {
             {totalPages > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-6 border-t border-slate-100 dark:border-slate-800/60 mt-4">
                 <div className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} total results
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalUsers)} of {totalUsers} total results
                 </div>
                 <div className="flex gap-2">
                   <Button

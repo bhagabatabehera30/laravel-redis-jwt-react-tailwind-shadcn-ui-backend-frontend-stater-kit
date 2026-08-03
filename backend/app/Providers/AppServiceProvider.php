@@ -23,6 +23,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        \Illuminate\Support\Facades\Broadcast::routes(['middleware' => ['auth:api'], 'prefix' => 'api']);
     }
 }

@@ -1,10 +1,13 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Settings, Shield, Key } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 
 const UserSettings: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
     <Layout>
       <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -36,7 +39,7 @@ const UserSettings: React.FC = () => {
               <CardDescription>Scale global roles seamlessly over the active platform.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" className="w-full">Configure</Button>
+              <Button variant="outline" className="w-full" onClick={() => navigate('/settings/roles')}>Configure</Button>
             </CardContent>
           </Card>
 

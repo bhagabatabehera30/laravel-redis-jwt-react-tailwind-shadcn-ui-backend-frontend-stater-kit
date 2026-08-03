@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { initEcho } from '../lib/echo';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -12,7 +13,9 @@ import { Separator } from './ui/separator';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from './ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
-import { Bell, Search, Menu, Settings, User, LogOut, Moon, Sun, Languages } from 'lucide-react';
+import { Bell, Search, Menu, Settings, User, LogOut, Moon, Sun, Languages, Globe } from 'lucide-react';
+import api from '../services/api';
+import { toast } from 'sonner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,16 +23,93 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { t } = useTranslation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
 
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [activeUuid, setActiveUuid] = useState<string | null>(localStorage.getItem('active_tenant_uuid'));
+  const [notifications, setNotifications] = useState<any[]>([]);
+
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await api.get('/notifications');
+        if (res.data.success) {
+          setNotifications(res.data.notifications);
+        }
+      } catch (err) {
+        console.error('Failed to load notifications', err);
+      }
+    };
+    
+    fetchNotifications();
+  }, []);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem('access_token');
+    if (!token || !user?.id) return;
+    
+    const echo = initEcho(token);
+    
+    if (echo) {
+      echo.private(`App.Models.User.${user.id}`)
+        .listenToAll((event: any, data: any) => {
+          console.log('Echo received event:', event, data);
+        })
+        .notification((notification: any) => {
+          console.log('Notification received:', notification);
+          setNotifications((prev) => [notification, ...prev]);
+          toast.info(notification.title, {
+            description: notification.message
+          });
+        });
+    }
+
+    return () => {
+      if (echo) {
+        echo.disconnect();
+      }
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const fetchLayoutTenants = async () => {
+      try {
+        const res = await api.get('/tenants');
+        if (res.data.success) {
+          setTenants(res.data.tenants);
+          // Auto-select first workspace context if none exists yet
+          if (!localStorage.getItem('active_tenant_uuid') && res.data.tenants.length > 0) {
+            const firstUuid = res.data.tenants[0].uuid;
+            localStorage.setItem('active_tenant_uuid', firstUuid);
+            setActiveUuid(firstUuid);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load layout tenants', err);
+      }
+    };
+
+    fetchLayoutTenants();
+
+    const handleTenantChange = () => {
+      setActiveUuid(localStorage.getItem('active_tenant_uuid'));
+    };
+
+    window.addEventListener('tenantChanged', handleTenantChange);
+    return () => {
+      window.removeEventListener('tenantChanged', handleTenantChange);
+    };
+  }, []);
 
   const navigation = [
     { name: 'Dashboard', href: '/' },
+    { name: 'Tenants', href: '/tenants' },
     { name: 'Users', href: '/users' },
     { name: 'Settings', href: '/settings' },
   ];
@@ -160,6 +240,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </form>
 
             <div className="flex items-center gap-x-2 sm:gap-x-4 lg:gap-x-6">
+              {/* Active Tenant Workspace selector */}
+              {tenants.length > 0 && (
+                <div className="flex items-center gap-2 border-r border-slate-200 dark:border-slate-800 pr-4">
+                  <Globe className="h-4 w-4 text-blue-500 hidden sm:inline" />
+                  <Select
+                    value={activeUuid || ''}
+                    onValueChange={(val) => {
+                      localStorage.setItem('active_tenant_uuid', val);
+                      setActiveUuid(val);
+                      const t = tenants.find((tenant) => tenant.uuid === val);
+                      toast.success(`Switching context to: ${t?.name}`);
+                      window.dispatchEvent(new Event('tenantChanged'));
+                      
+                      // Force a hard reload to ensure all data, contexts, and components 
+                      // completely reset and refetch with the new active tenant context.
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 400);
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px] md:w-[170px] h-8 bg-transparent border-slate-200 dark:border-slate-800 focus:ring-0 text-xs font-bold text-slate-800 dark:text-slate-200">
+                      <SelectValue placeholder="Workspace" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenants.map((t) => (
+                        <SelectItem key={t.uuid} value={t.uuid} className="text-xs font-semibold">
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {/* Language dropdown */}
               <div className="hidden sm:flex items-center gap-2">
                 <Languages className="h-4 w-4 text-muted-foreground" />
@@ -194,15 +307,54 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:bg-accent hover:text-accent-foreground">
                     <Bell className="h-5 w-5" />
-                    <Badge className="absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 text-[10px] flex items-center justify-center">3</Badge>
+                    {notifications.length > 0 && (
+                      <Badge className="absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 text-[10px] flex items-center justify-center">
+                        {notifications.length}
+                      </Badge>
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-80 max-h-[400px] overflow-y-auto">
+                  <DropdownMenuLabel className="flex justify-between items-center">
+                    Notifications
+                    {notifications.length > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-auto p-1 text-xs"
+                        onClick={async () => {
+                          await api.post('/notifications/mark-as-read');
+                          setNotifications([]);
+                        }}
+                      >
+                        Mark all as read
+                      </Button>
+                    )}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>New user registered</DropdownMenuItem>
-                  <DropdownMenuItem>System update available</DropdownMenuItem>
-                  <DropdownMenuItem>Payment received</DropdownMenuItem>
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No new notifications
+                    </div>
+                  ) : (
+                    notifications.map((notification, index) => (
+                      <DropdownMenuItem 
+                        key={notification.id || index} 
+                        className="flex flex-col items-start gap-1 p-3 cursor-pointer"
+                        onClick={async () => {
+                          if (notification.id) {
+                            await api.post('/notifications/mark-as-read', { id: notification.id });
+                            setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+                          }
+                        }}
+                      >
+                        <span className="font-semibold">{notification.data?.title || notification.title}</span>
+                        <span className="text-xs text-muted-foreground line-clamp-2">
+                          {notification.data?.message || notification.message}
+                        </span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -227,16 +379,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-profile" className="cursor-pointer w-full flex items-center">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings" className="cursor-pointer w-full flex items-center">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout}>
+                  <DropdownMenuItem onSelect={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>{t('logout')}</span>
                   </DropdownMenuItem>

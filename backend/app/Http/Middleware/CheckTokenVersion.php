@@ -12,6 +12,7 @@ class CheckTokenVersion
 {
     public function handle(Request $request, Closure $next): Response
     {
+        Log::warning('CheckTokenVersion: Unauthenticated request', ['ip' => $request->ip()]);
         /** @var \Tymon\JWTAuth\JWTGuard $guard */
         $guard = auth('api');
         $user = $guard->user();

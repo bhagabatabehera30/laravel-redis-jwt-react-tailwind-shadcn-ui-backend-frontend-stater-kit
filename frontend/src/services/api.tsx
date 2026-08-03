@@ -20,6 +20,12 @@ api.interceptors.request.use(
             config.headers.Authorization = `Bearer ${token}`;
         }
 
+        const activeTenantUuid = localStorage.getItem('active_tenant_uuid');
+        if (activeTenantUuid) {
+            config.headers = config.headers || {};
+            config.headers['X-Tenant-UUID'] = activeTenantUuid;
+        }
+
         if (config.data instanceof FormData) {
             delete config.headers['Content-Type'];
         } else if (config.data instanceof URLSearchParams) {
@@ -113,7 +119,11 @@ const logoutIfTokenExpired = async () => {
     }
     // Clear memory token
     setAccessToken(null);
-    window.location.href = '/login';
+    
+    // Only redirect/reload if the user is deep inside a protected route (not on root / or /login)
+    if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.location.href = '/';
+    }
 };
 
 export default api;

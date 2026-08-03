@@ -13,14 +13,34 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles,  HasFactory, Notifiable,  SoftDeletes;
+    use HasFactory, HasRoles, Notifiable, SoftDeletes;
 
 
+    protected $guard_name = 'api';
     protected $dates = ['deleted_at'];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
+    }
+
+    public function tenants()
+    {
+        return $this->belongsToMany(Tenant::class, 'tenant_users')
+            ->withPivot('role_id')
+            ->withTimestamps();
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -33,13 +53,12 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'mobile_number',
         'status',
-        'author_bio',
-        'user_pic',
-        'facebook_link',
-        'youtube_link',
-        'linkedin_link',
-        'instagram_link',
-        'twitter_link'
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'two_factor_confirmed_at',
+        'otp',
+        'otp_expiry',
+        'token_version'
     ];
 
     /**
@@ -51,7 +70,9 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'remember_token',
         'two_factor_secret', 
-        'two_factor_recovery_codes'
+        'two_factor_recovery_codes',
+        'otp',
+        'otp_expiry',
     ];
 
 
@@ -84,7 +105,7 @@ class User extends Authenticatable implements JWTSubject
 
     public function isAdminAccess()
     {
-        return $this->hasRole('Super Admin');
+        return $this->hasRole('Super Admin') || ($this->hasRole('Owner') && $this->tenants()->count() === 0);
     }
     public function can($abilities, $arguments = [])
     {
@@ -107,5 +128,39 @@ class User extends Authenticatable implements JWTSubject
     protected function permissionsArr()
     {
         return config('permissions');
+    }
+
+    public function userProfile()
+    {
+        return $this->hasOne(UserProfile::class);
+    }
+
+    public function tenantRole($tenantId)
+    {
+        $pivot = $this->tenants()->where('tenant_id', $tenantId)->first();
+        if ($pivot && $pivot->pivot->role_id) {
+            return \Spatie\Permission\Models\Role::find($pivot->pivot->role_id);
+        }
+        return null;
+    }
+
+    public function hasTenantRole($tenantId, string $roleName): bool
+    {
+        $role = $this->tenantRole($tenantId);
+        return $role && $role->name === $roleName;
+    }
+
+    public function hasTenantPermission($tenantId, string $permissionName): bool
+    {
+        $role = $this->tenantRole($tenantId);
+        return $role && $role->hasPermissionTo($permissionName);
+    }
+
+    /**
+     * The channels the user receives notification broadcasts on.
+     */
+    public function receivesBroadcastNotificationsOn(): string
+    {
+        return 'App.Models.User.'.$this->id;
     }
 }
